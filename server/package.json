@@ -1,0 +1,17 @@
+{
+  "name": "wled-building-controller-server",
+  "version": "1.0.0",
+  "description": "Backend Express do WLED Building Controller (5 andares, Raspberry Pi 4)",
+  "main": "server.js",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}

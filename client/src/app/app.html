@@ -1,0 +1,219 @@
+<div class="page">
+  <header class="header">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>{{ title }}</h1>
+        <p class="subtitle">Iluminação por andar · brilho máximo {{ brightnessPercent(maxBrightness()) }}%</p>
+      </div>
+    </div>
+    <div class="header-status" *ngIf="!loading() && !loadError()">
+      <span class="pill" [class.pill-ok]="onlineCount() === floors().length" [class.pill-warn]="onlineCount() < floors().length">
+        {{ onlineCount() }}/{{ floors().length }} online
+      </span>
+      <button class="btn btn-ghost" type="button" (click)="refreshAll()" title="Atualizar status">↻</button>
+    </div>
+  </header>
+
+  <!-- Loading -->
+  <section class="loading" *ngIf="loading()">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Carregando andares…</p>
+  </section>
+
+  <!-- Erro de conexão com o servidor -->
+  <section class="error-box" *ngIf="!loading() && loadError()">
+    <p>{{ loadError() }}</p>
+    <button class="btn btn-primary" type="button" (click)="ngOnInit()">Tentar novamente</button>
+  </section>
+
+  <ng-container *ngIf="!loading() && !loadError()">
+    <!-- Playlists globais -->
+    <section class="playlists">
+      <div class="section-head">
+        <h2>Playlists</h2>
+        <button class="btn btn-ghost" type="button" (click)="newPlaylist()" *ngIf="!playlistDraft()">+ Nova</button>
+      </div>
+
+      <div class="playlist-grid">
+        <div
+          class="playlist-card"
+          *ngFor="let pl of playlists(); trackBy: trackPlaylist"
+          [class.active]="activePlaylistId() === pl.id"
+        >
+          <div class="swatches" aria-hidden="true">
+            <span *ngFor="let c of pl.colors" [style.background]="c"></span>
+          </div>
+          <div class="playlist-info">
+            <strong>{{ pl.name }}</strong>
+            <small>{{ effectName(pl.fx) }} · {{ brightnessPercent(pl.bri) }}%</small>
+          </div>
+          <div class="playlist-actions">
+            <button
+              class="btn btn-primary"
+              type="button"
+              (click)="applyPlaylist(pl)"
+              [disabled]="applyingPlaylistId() !== null"
+            >
+              {{ applyingPlaylistId() === pl.id ? 'Aplicando…' : activePlaylistId() === pl.id ? 'Ativa' : 'Aplicar' }}
+            </button>
+            <button class="btn btn-icon" type="button" (click)="editPlaylist(pl)" title="Editar">✎</button>
+            <button class="btn btn-icon btn-danger" type="button" (click)="deletePlaylist(pl)" title="Apagar">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="msg msg-ok" *ngIf="playlistMessage()">{{ playlistMessage() }}</p>
+      <p class="msg msg-err" *ngIf="playlistError()">{{ playlistError() }}</p>
+
+      <!-- Editor de playlist -->
+      <form class="playlist-editor" *ngIf="playlistDraft() as draft" (ngSubmit)="savePlaylist()">
+        <h3>{{ playlistDraftIsNew() ? 'Nova playlist' : 'Editar playlist' }}</h3>
+        <div class="editor-row">
+          <label>
+            Nome
+            <input type="text" name="name" [(ngModel)]="draft.name" placeholder="Ex.: Outubro Rosa" required />
+          </label>
+          <label>
+            Efeito
+            <select name="fx" [(ngModel)]="draft.fx">
+              <option *ngFor="let e of effects()" [ngValue]="e.id">{{ e.name }}</option>
+            </select>
+          </label>
+        </div>
+        <div class="editor-row">
+          <label class="color-field">
+            Cor 1
+            <input type="color" name="c0" [(ngModel)]="draft.colors[0]" />
+          </label>
+          <label class="color-field">
+            Cor 2
+            <input type="color" name="c1" [(ngModel)]="draft.colors[1]" />
+          </label>
+          <label class="color-field">
+            Cor 3
+            <input type="color" name="c2" [(ngModel)]="draft.colors[2]" />
+          </label>
+        </div>
+        <div class="editor-row">
+          <label>
+            Velocidade ({{ draft.sx }})
+            <input type="range" name="sx" min="0" max="255" [(ngModel)]="draft.sx" />
+          </label>
+          <label>
+            Intensidade ({{ draft.ix }})
+            <input type="range" name="ix" min="0" max="255" [(ngModel)]="draft.ix" />
+          </label>
+          <label>
+            Brilho ({{ brightnessPercent(draft.bri) }}%)
+            <input type="range" name="bri" min="0" [max]="maxBrightness()" [(ngModel)]="draft.bri" />
+          </label>
+        </div>
+        <p class="msg msg-err" *ngIf="playlistDraftError()">{{ playlistDraftError() }}</p>
+        <div class="editor-actions">
+          <button class="btn btn-ghost" type="button" (click)="cancelPlaylistEdit()">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Salvar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Grid de andares -->
+    <section class="floors">
+      <div class="section-head">
+        <h2>Andares</h2>
+        <small class="hint" *ngIf="effectsSource() === 'fallback'">lista de efeitos padrão (nenhum WLED respondeu)</small>
+      </div>
+
+      <div class="grid">
+        <article
+          class="card"
+          *ngFor="let floor of floors(); trackBy: trackFloor"
+          [class.offline]="!floor.online"
+          [class.busy]="floor.busy"
+        >
+          <div class="card-head">
+            <ng-container *ngIf="!floor.editing">
+              <div class="card-title">
+                <h3>{{ floor.name }}</h3>
+                <small class="ip">{{ floor.ip }}</small>
+              </div>
+              <div class="card-tools">
+                <span class="status-dot" [class.online]="floor.online" [title]="floor.online ? 'Online' : 'Offline'"></span>
+                <button class="btn btn-icon" type="button" (click)="startEdit(floor)" title="Editar nome e IP">✎</button>
+              </div>
+            </ng-container>
+
+            <form class="edit-form" *ngIf="floor.editing" (ngSubmit)="saveEdit(floor)">
+              <input type="text" [name]="'name-' + floor.id" [(ngModel)]="floor.editName" placeholder="Nome" />
+              <input
+                type="text"
+                [name]="'ip-' + floor.id"
+                [(ngModel)]="floor.editIp"
+                placeholder="192.168.1.101"
+                inputmode="decimal"
+              />
+              <p class="msg msg-err" *ngIf="floor.editError">{{ floor.editError }}</p>
+              <div class="edit-actions">
+                <button class="btn btn-ghost" type="button" (click)="cancelEdit(floor)">Cancelar</button>
+                <button class="btn btn-primary" type="submit">Salvar</button>
+              </div>
+            </form>
+          </div>
+
+          <button
+            class="lamp-wrap"
+            type="button"
+            (click)="toggle(floor)"
+            [disabled]="floor.busy"
+            [title]="floor.on ? 'Desligar' : 'Ligar'"
+          >
+            <div
+              class="lamp"
+              [class.off]="!floor.on"
+              [style.--lamp-color]="floor.color"
+              [style.--lamp-glow]="floor.on ? (floor.brightness / maxBrightness()) : 0"
+            ></div>
+            <span class="lamp-label">{{ floor.on ? 'Ligado' : 'Desligado' }}</span>
+          </button>
+
+          <div class="controls">
+            <label class="control">
+              <span>Brilho <b>{{ brightnessPercent(floor.brightness) }}%</b></span>
+              <input
+                type="range"
+                min="0"
+                [max]="maxBrightness()"
+                [value]="floor.brightness"
+                (input)="previewBrightness(floor, $any($event.target).value)"
+                (change)="setBrightness(floor, $any($event.target).value)"
+                [disabled]="!floor.online"
+              />
+            </label>
+
+            <label class="control">
+              <span>Cor</span>
+              <input
+                type="color"
+                [value]="floor.color"
+                (change)="setColor(floor, $any($event.target).value)"
+                [disabled]="!floor.online"
+              />
+            </label>
+
+            <label class="control">
+              <span>Preset</span>
+              <select [ngModel]="floor.fx" (ngModelChange)="setEffect(floor, $event)" [disabled]="!floor.online" [name]="'fx-' + floor.id">
+                <option *ngFor="let e of effects()" [ngValue]="e.id">{{ e.name }}</option>
+                <option *ngIf="!effectKnown(floor.fx)" [ngValue]="floor.fx">Efeito {{ floor.fx }}</option>
+              </select>
+            </label>
+          </div>
+        </article>
+      </div>
+    </section>
+  </ng-container>
+
+  <footer class="footer">
+    <span>Brilho limitado a {{ brightnessPercent(maxBrightness()) }}% para preservar os LEDs.</span>
+  </footer>
+</div>

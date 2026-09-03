@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+
+# Build do Angular
+client/dist/
+client/.angular/
+client/out-tsc/
+
+# Frontend compilado servido pelo Express (gerado a partir de client/dist)
+server/public/*
+!server/public/.gitkeep
+
+# Dados editáveis pela UI (IPs, playlists) — criados na 1ª execução
+server/data/
+
+# Diversos
+npm-debug.log*
+.DS_Store
+*.log
